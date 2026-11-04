@@ -1,0 +1,1299 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Simulador de Campo Electrostático</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Lab-notebook layout: sticky tab rail above a two-column workbench
+   (canvas stage + control/readout panel) that stacks to one column on phones. */
+:root{
+  --bg:#eef0f6;
+  --surface:#ffffff;
+  --surface-2:#e3e6f0;
+  --ink:#161a24;
+  --ink-dim:#5b6072;
+  --line:#c7cce0;
+  --accent:#4b4bd6;
+  --accent-ink:#ffffff;
+  --pos:#c53434;
+  --neg:#1f5fae;
+  --grid-line:rgba(22,26,36,.09);
+  --font-display:"Fraunces",Georgia,serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#10121a; --surface:#191c27; --surface-2:#232735;
+    --ink:#e9ebf4; --ink-dim:#9aa0b6; --line:#2d3244;
+    --accent:#9291ff; --accent-ink:#11121c;
+    --pos:#ff7a6b; --neg:#6fa8e8;
+    --grid-line:rgba(233,235,244,.09);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10121a; --surface:#191c27; --surface-2:#232735;
+  --ink:#e9ebf4; --ink-dim:#9aa0b6; --line:#2d3244;
+  --accent:#9291ff; --accent-ink:#11121c;
+  --pos:#ff7a6b; --neg:#6fa8e8;
+  --grid-line:rgba(233,235,244,.09);
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:var(--font-body); line-height:1.5;
+}
+.page{
+  max-width:1120px; margin:0 auto;
+  padding-left:max(16px, env(safe-area-inset-left,0px));
+  padding-right:max(16px, env(safe-area-inset-right,0px));
+  padding-block:28px 64px;
+}
+h1,h2,h3{font-family:var(--font-display); font-weight:600; text-wrap:balance; margin:0;}
+p{margin:0 0 .7em; color:var(--ink);}
+.dim{color:var(--ink-dim);}
+.mono{font-family:var(--font-mono); font-variant-numeric:tabular-nums;}
+a{color:var(--accent);}
+
+/* ---------- masthead ---------- */
+.masthead{margin-bottom:22px;}
+.eyebrow{
+  font-family:var(--font-mono); font-size:.72rem; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--accent); margin:0 0 .5em;
+}
+.masthead h1{font-size:clamp(1.6rem,4vw,2.3rem); letter-spacing:-.01em;}
+.masthead .sub{color:var(--ink-dim); max-width:62ch; margin-top:.5em; font-size:.98rem;}
+
+/* ---------- tabs ---------- */
+.tabbar{
+  display:flex; flex-wrap:wrap; gap:6px; position:sticky; top:env(safe-area-inset-top,0px);
+  z-index:10; background:var(--bg); padding-block:10px; margin-bottom:18px;
+  border-bottom:1px solid var(--line);
+}
+.tab-btn{
+  font-family:var(--font-body); font-size:.86rem; font-weight:600; color:var(--ink-dim);
+  background:transparent; border:1px solid transparent; border-radius:8px 8px 0 0;
+  padding:9px 14px; cursor:pointer; white-space:nowrap;
+}
+.tab-btn:hover{color:var(--ink); background:var(--surface-2);}
+.tab-btn[aria-selected="true"]{
+  color:var(--accent); background:var(--surface); border-color:var(--line);
+  border-bottom-color:var(--surface); position:relative; top:1px;
+}
+.tab-btn:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+.panel[hidden]{display:none!important;}
+
+/* ---------- workbench (stage + controls) ---------- */
+.workbench{display:grid; grid-template-columns:1.5fr 1fr; gap:16px; align-items:start;}
+@media (max-width:820px){.workbench{grid-template-columns:1fr;}}
+
+.card{
+  background:var(--surface); border:1px solid var(--line); border-radius:12px;
+  padding:16px; min-width:0;
+}
+.card + .card{margin-top:14px;}
+.card h3{font-size:1rem; margin-bottom:.5em;}
+.card h3 .unit{font-family:var(--font-mono); font-weight:400; color:var(--ink-dim); font-size:.8em;}
+
+.stage-wrap{position:relative;}
+canvas{display:block; width:100%; height:auto; border-radius:8px; background:var(--surface-2); touch-action:none;}
+
+/* ---------- legend ---------- */
+.legend{display:flex; flex-wrap:wrap; gap:10px 16px; margin-top:10px; font-size:.82rem; color:var(--ink-dim);}
+.legend span{display:inline-flex; align-items:center; gap:6px;}
+.dot{width:10px; height:10px; border-radius:50%; display:inline-block; flex:none;}
+.dot.pos{background:var(--pos);}
+.dot.neg{background:var(--neg);}
+.dot.probe{background:var(--accent); transform:rotate(45deg); border-radius:2px;}
+.lineSwatch{width:16px; height:2px; background:var(--accent); display:inline-block;}
+.lineSwatch.dash{background:repeating-linear-gradient(90deg,var(--ink-dim) 0 4px, transparent 4px 7px);}
+
+/* ---------- controls ---------- */
+.field{margin-bottom:12px;}
+.field:last-child{margin-bottom:0;}
+.field label{
+  display:flex; justify-content:space-between; gap:8px; font-size:.82rem; font-weight:600;
+  margin-bottom:5px;
+}
+.field label .val{font-family:var(--font-mono); font-weight:500; color:var(--accent);}
+input[type="range"]{
+  width:100%; accent-color:var(--accent); height:20px;
+}
+.btn-row{display:flex; flex-wrap:wrap; gap:8px; margin-top:4px;}
+.btn{
+  font-family:var(--font-body); font-size:.82rem; font-weight:600; cursor:pointer;
+  border-radius:7px; padding:8px 12px; border:1px solid var(--line);
+  background:var(--surface-2); color:var(--ink);
+}
+.btn:hover{border-color:var(--accent);}
+.btn:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+.btn.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent);}
+.btn.pos{border-color:var(--pos); color:var(--pos); background:transparent;}
+.btn.neg{border-color:var(--neg); color:var(--neg); background:transparent;}
+.btn[disabled]{opacity:.45; cursor:default;}
+.btn.small{padding:6px 10px; font-size:.76rem;}
+
+.toggle-row{display:flex; align-items:center; gap:8px; font-size:.84rem; margin-bottom:8px;}
+.toggle-row input{accent-color:var(--accent); width:16px; height:16px;}
+
+.seg{display:flex; flex-wrap:wrap; gap:6px;}
+.seg button{
+  font-family:var(--font-body); font-size:.78rem; font-weight:600; cursor:pointer;
+  border-radius:999px; padding:7px 12px; border:1px solid var(--line);
+  background:var(--surface-2); color:var(--ink-dim);
+}
+.seg button[aria-pressed="true"]{background:var(--accent); color:var(--accent-ink); border-color:var(--accent);}
+
+/* ---------- readouts ---------- */
+.readout dl{display:grid; grid-template-columns:1fr auto; gap:5px 10px; margin:0; font-size:.86rem;}
+.readout dt{color:var(--ink-dim);}
+.readout dd{margin:0; font-family:var(--font-mono); text-align:right; font-variant-numeric:tabular-nums;}
+.readout dd.pos{color:var(--pos);}
+.readout dd.neg{color:var(--neg);}
+.note{
+  font-size:.8rem; color:var(--ink-dim); background:var(--surface-2); border-radius:8px;
+  padding:9px 11px; margin-top:10px; border:1px dashed var(--line);
+}
+.eq{
+  font-family:var(--font-mono); font-size:.84rem; background:var(--surface-2); border-radius:8px;
+  padding:10px 12px; overflow-x:auto; white-space:pre; line-height:1.65;
+}
+
+/* ---------- reference tab ---------- */
+.ref-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px;}
+table.ref{width:100%; border-collapse:collapse; font-size:.86rem;}
+table.ref th, table.ref td{text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top;}
+table.ref th{color:var(--ink-dim); font-weight:600; font-size:.74rem; text-transform:uppercase; letter-spacing:.04em;}
+table.ref td.f{font-family:var(--font-mono); white-space:nowrap;}
+.sec{margin-top:26px;}
+.sec h2{font-size:1.15rem; margin-bottom:.6em;}
+
+.pill{
+  display:inline-block; font-family:var(--font-mono); font-size:.72rem; padding:2px 8px;
+  border-radius:999px; background:var(--surface-2); color:var(--ink-dim); border:1px solid var(--line);
+}
+
+footer{margin-top:40px; padding-top:16px; border-top:1px solid var(--line); font-size:.78rem; color:var(--ink-dim);}
+</style>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+
+<div class="page">
+
+  <div class="masthead">
+    <p class="eyebrow">Física · Campo electrostático</p>
+    <h1>Simulador de campo electrostático</h1>
+    <p class="sub">Un banco de trabajo interactivo para los cuatro bloques del tema: cargas puntuales y el principio de superposición, campos uniformes y el movimiento de cargas, distribuciones continuas de carga, y una hoja de fórmulas de repaso.</p>
+  </div>
+
+  <div class="tabbar" role="tablist" aria-label="Secciones del simulador">
+    <button class="tab-btn" role="tab" data-tab="t1" aria-selected="true">① Cargas puntuales</button>
+    <button class="tab-btn" role="tab" data-tab="t2" aria-selected="false">② Campo uniforme</button>
+    <button class="tab-btn" role="tab" data-tab="t3" aria-selected="false">③ Distribuciones continuas</button>
+    <button class="tab-btn" role="tab" data-tab="t4" aria-selected="false">④ Resumen y fórmulas</button>
+  </div>
+
+  <!-- ===================== TAB 1 : PUNTUAL CHARGES ===================== -->
+  <section class="panel" id="t1" role="tabpanel">
+    <div class="workbench">
+      <div>
+        <div class="card stage-wrap">
+          <h3>Mesa de cargas <span class="unit">arrastra las cargas y la sonda</span></h3>
+          <canvas id="c1" width="800" height="560" aria-label="Zona de simulación de campo eléctrico"></canvas>
+          <div class="legend">
+            <span><i class="dot pos"></i> carga positiva</span>
+            <span><i class="dot neg"></i> carga negativa</span>
+            <span><i class="dot probe"></i> carga de prueba (sonda)</span>
+            <span><i class="lineSwatch"></i> líneas de campo</span>
+            <span><i class="lineSwatch dash"></i> superficies equipotenciales</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Trabajo entre dos puntos</h3>
+          <p class="dim" style="font-size:.84rem">Coloca la sonda en un punto y fija A; muévela a otro punto y fija B. El simulador calcula W<sub>A→B</sub> = q(V<sub>A</sub> − V<sub>B</sub>), igual que al integrar la fuerza a lo largo del camino — el resultado no depende de la trayectoria.</p>
+          <div class="btn-row">
+            <button class="btn" id="setA">Fijar A en la sonda</button>
+            <button class="btn" id="setB">Fijar B en la sonda</button>
+            <button class="btn small" id="clearAB">Limpiar A/B</button>
+          </div>
+          <div class="readout" style="margin-top:12px">
+            <dl>
+              <dt>Punto A</dt><dd id="ptA">—</dd>
+              <dt>V<sub>A</sub></dt><dd id="vA">—</dd>
+              <dt>Punto B</dt><dd id="ptB">—</dd>
+              <dt>V<sub>B</sub></dt><dd id="vB">—</dd>
+              <dt>W<sub>A→B</sub> = q·(V<sub>A</sub>−V<sub>B</sub>)</dt><dd id="wab">—</dd>
+            </dl>
+          </div>
+          <div class="note" id="wabNote">Fija A y B para ver si el movimiento es espontáneo o requiere una fuerza externa.</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h3>Cargas de la escena</h3>
+          <div class="btn-row">
+            <button class="btn pos" id="addPos">+ carga positiva</button>
+            <button class="btn neg" id="addNeg">+ carga negativa</button>
+          </div>
+          <div class="field" style="margin-top:12px" id="selField" hidden>
+            <label>Carga seleccionada <span class="val mono" id="selVal">0 µC</span></label>
+            <input type="range" id="selSlider" min="-10" max="10" step="0.5" value="2">
+            <div class="btn-row"><button class="btn small" id="delSel">Eliminar esta carga</button></div>
+          </div>
+          <p class="dim" id="selHint" style="font-size:.8rem; margin-top:8px">Toca una carga en la escena para editarla.</p>
+        </div>
+
+        <div class="card">
+          <h3>Sonda de prueba</h3>
+          <div class="field">
+            <label>Carga de prueba q <span class="val mono" id="probeVal">+1 µC</span></label>
+            <input type="range" id="probeSlider" min="-5" max="5" step="0.5" value="1">
+          </div>
+          <div class="readout">
+            <dl>
+              <dt>Posición</dt><dd id="probePos" class="mono">—</dd>
+              <dt>E (campo)</dt><dd id="probeE">—</dd>
+              <dt>Dirección de E</dt><dd id="probeEdir">—</dd>
+              <dt>V (potencial)</dt><dd id="probeV">—</dd>
+              <dt>F = q·E</dt><dd id="probeF">—</dd>
+            </dl>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Visualización</h3>
+          <div class="toggle-row"><input type="checkbox" id="toggleVec" checked><label for="toggleVec">Vectores de campo E</label></div>
+          <div class="toggle-row"><input type="checkbox" id="toggleLines" checked><label for="toggleLines">Líneas de campo</label></div>
+          <div class="toggle-row"><input type="checkbox" id="toggleEq"><label for="toggleEq">Superficies equipotenciales</label></div>
+          <p class="note">Las líneas de campo se trazan desde las cargas positivas (principio de superposición aplicado al vector E); si la escena solo tiene cargas negativas, activa las equipotenciales para ver su forma.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TAB 2 : UNIFORM FIELD ===================== -->
+  <section class="panel" id="t2" role="tabpanel" hidden>
+    <div class="workbench">
+      <div>
+        <div class="card stage-wrap">
+          <h3>Condensador de placas paralelas <span class="unit">campo uniforme</span></h3>
+          <canvas id="c2" width="800" height="480" aria-label="Simulación de placas paralelas y movimiento de una carga"></canvas>
+          <div class="btn-row" style="margin-top:10px">
+            <button class="btn primary" id="launchBtn">Lanzar partícula</button>
+            <button class="btn" id="playPause" disabled>Pausar</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Ecuaciones con los valores actuales</h3>
+          <div class="eq" id="eqBox">—</div>
+          <div class="note" id="exitNote">Pulsa «Lanzar partícula» para iniciar el movimiento.</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h3>Placas</h3>
+          <div class="field">
+            <label>Separación d <span class="val mono" id="dVal">4 cm</span></label>
+            <input type="range" id="dSlider" min="1" max="8" step="0.5" value="4">
+          </div>
+          <div class="field">
+            <label>Densidad de carga σ <span class="val mono" id="sigVal">8 µC/m²</span></label>
+            <input type="range" id="sigSlider" min="-20" max="20" step="1" value="8">
+          </div>
+        </div>
+        <div class="card">
+          <h3>Partícula</h3>
+          <div class="field">
+            <label>Carga q <span class="val mono" id="qVal">1 µC</span></label>
+            <input type="range" id="qSlider" min="-5" max="5" step="0.5" value="1">
+          </div>
+          <div class="field">
+            <label>Masa m <span class="val mono" id="mVal">1 g</span></label>
+            <input type="range" id="mSlider" min="0.1" max="10" step="0.1" value="1">
+          </div>
+          <div class="field">
+            <label>Velocidad inicial v₀ <span class="val mono" id="vVal">4 m/s</span></label>
+            <input type="range" id="vSlider" min="0" max="20" step="0.5" value="4">
+          </div>
+          <div class="field">
+            <label>Ángulo de entrada θ <span class="val mono" id="angVal">0°</span></label>
+            <input type="range" id="angSlider" min="-90" max="90" step="5" value="0">
+          </div>
+          <p class="dim" style="font-size:.78rem">θ = 0° entra paralela a E → M.R.U.A. rectilíneo. θ ≠ 0° entra con componente transversal → trayectoria parabólica (MRU en y, MRUA en x).</p>
+        </div>
+        <div class="card readout">
+          <h3>Campo entre placas</h3>
+          <dl>
+            <dt>E = σ/ε₀</dt><dd id="eField">—</dd>
+            <dt>a = qE/m</dt><dd id="aField">—</dd>
+            <dt>|ΔV| = E·d</dt><dd id="dvField">—</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TAB 3 : CONTINUOUS DISTRIBUTIONS ===================== -->
+  <section class="panel" id="t3" role="tabpanel" hidden>
+    <div class="workbench">
+      <div>
+        <div class="card stage-wrap">
+          <h3>Intensidad de campo E(r) <span class="unit" id="distName">conductor esférico</span></h3>
+          <canvas id="c3" width="800" height="440" aria-label="Gráfica de la intensidad de campo frente a la distancia"></canvas>
+        </div>
+        <div class="card">
+          <h3>Fórmula</h3>
+          <div class="eq" id="distFormula">—</div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>Distribución</h3>
+          <div class="seg" id="distSeg">
+            <button data-d="cond" aria-pressed="true">Conductor esférico</button>
+            <button data-d="sphere" aria-pressed="false">Esfera uniforme</button>
+            <button data-d="wire" aria-pressed="false">Hilo infinito</button>
+            <button data-d="sheet" aria-pressed="false">Lámina infinita</button>
+            <button data-d="cap" aria-pressed="false">Condensador</button>
+          </div>
+        </div>
+        <div class="card" id="distParams">
+          <h3>Parámetros</h3>
+          <div class="field" data-p="Q">
+            <label>Carga total Q <span class="val mono" id="QVal">6 µC</span></label>
+            <input type="range" id="QSlider" min="-20" max="20" step="1" value="6">
+          </div>
+          <div class="field" data-p="R">
+            <label>Radio R <span class="val mono" id="RVal">10 cm</span></label>
+            <input type="range" id="RSlider" min="2" max="25" step="1" value="10">
+          </div>
+          <div class="field" data-p="lam" hidden>
+            <label>Densidad lineal λ <span class="val mono" id="lamVal">0.4 µC/m</span></label>
+            <input type="range" id="lamSlider" min="-2" max="2" step="0.1" value="0.4">
+          </div>
+          <div class="field" data-p="sig" hidden>
+            <label>Densidad superficial σ <span class="val mono" id="sig3Val">3 µC/m²</span></label>
+            <input type="range" id="sig3Slider" min="-10" max="10" step="0.5" value="3">
+          </div>
+          <div class="field" data-p="capd" hidden>
+            <label>Separación d <span class="val mono" id="capdVal">6 cm</span></label>
+            <input type="range" id="capdSlider" min="1" max="15" step="1" value="6">
+          </div>
+        </div>
+        <div class="card readout">
+          <h3>Valor de pico</h3>
+          <dl>
+            <dt>E máximo en la gráfica</dt><dd id="emaxField">—</dd>
+            <dt>En r = R</dt><dd id="erField">—</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TAB 4 : SUMMARY ===================== -->
+  <section class="panel" id="t4" role="tabpanel" hidden>
+    <div class="card">
+      <h2 style="font-size:1.2rem">Magnitudes del campo electrostático</h2>
+      <div class="ref-grid" style="margin-top:12px">
+        <table class="ref">
+          <tr><th>Magnitud</th><th>Expresión</th></tr>
+          <tr><td>Fuerza (Coulomb)</td><td class="f">F = K·Q·q / r²</td></tr>
+          <tr><td>Intensidad de campo</td><td class="f">E = K·Q / r²</td></tr>
+          <tr><td>Potencial</td><td class="f">V = K·Q / r</td></tr>
+          <tr><td>Energía potencial</td><td class="f">Ep = K·Q·q / r = q·V</td></tr>
+          <tr><td>Fuerza sobre q en campo E</td><td class="f">F = q·E</td></tr>
+          <tr><td>Trabajo del campo</td><td class="f">W<sub>A→B</sub> = K·Q·q·(1/r<sub>A</sub> − 1/r<sub>B</sub>)</td></tr>
+          <tr><td>Trabajo y potencial</td><td class="f">W<sub>A→B</sub> = q·(V<sub>A</sub> − V<sub>B</sub>)</td></tr>
+          <tr><td>Campo uniforme</td><td class="f">E·d = |ΔV|</td></tr>
+          <tr><td>Constante en el vacío</td><td class="f">K₀ = 9·10⁹ N·m²/C²</td></tr>
+        </table>
+      </div>
+      <p class="note" style="margin-top:14px">Las cargas Q y q se introducen siempre con su signo. K depende del medio: K = 1/(4πε); en el vacío ε₀ ≈ 8,84·10⁻¹² C²/(N·m²), consistente con K₀ = 9·10⁹.</p>
+    </div>
+
+    <div class="sec">
+      <h2>Hacia dónde se mueve una carga espontáneamente</h2>
+      <table class="ref">
+        <tr><th>Carga que se mueve</th><th>Energía potencial</th><th>Potencial de la región</th></tr>
+        <tr><td>q positiva</td><td>decrece (ΔEp &lt; 0)</td><td>se mueve hacia V decreciente</td></tr>
+        <tr><td>q negativa</td><td>decrece (ΔEp &lt; 0)</td><td>se mueve hacia V creciente</td></tr>
+      </table>
+      <p class="dim" style="font-size:.85rem; margin-top:8px">En ambos casos el trabajo del campo es positivo (W &gt; 0) cuando el movimiento es espontáneo; si W &lt; 0 hace falta una fuerza externa, con W<sub>ext</sub> = −W<sub>campo</sub>.</p>
+    </div>
+
+    <div class="sec">
+      <h2>Campo gravitatorio y campo eléctrico</h2>
+      <div class="ref-grid">
+        <div>
+          <p class="pill">Analogías</p>
+          <ul style="font-size:.88rem; padding-left:1.1em; margin-top:8px; color:var(--ink)">
+            <li>Ambos quedan definidos por dos magnitudes vectoriales (fuerza e intensidad) y dos escalares (energía potencial y potencial).</li>
+            <li>Los dos son campos centrales con simetría radial creados por una masa o una carga puntual.</li>
+            <li>Al ser conservativos, tienen asociadas una energía potencial y un potencial.</li>
+            <li>La intensidad decrece con el cuadrado de la distancia en ambos casos.</li>
+          </ul>
+        </div>
+        <div>
+          <p class="pill">Diferencias</p>
+          <ul style="font-size:.88rem; padding-left:1.1em; margin-top:8px; color:var(--ink)">
+            <li>La fuerza gravitatoria es siempre atractiva; la eléctrica puede ser atractiva o repulsiva.</li>
+            <li>Las líneas gravitatorias siempre entran en la masa; las eléctricas nacen en cargas positivas y mueren en negativas.</li>
+            <li>G es universal; K depende del medio, y es mucho mayor que G, por lo que la interacción eléctrica domina a escala atómica.</li>
+            <li>A gran escala, el equilibrio entre cargas positivas y negativas deja predominar la gravedad.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h2>Distribuciones continuas de carga</h2>
+      <table class="ref">
+        <tr><th>Distribución</th><th>Dentro</th><th>Fuera / general</th></tr>
+        <tr><td>Conductor esférico en equilibrio</td><td class="f">E = 0 (r &lt; R)</td><td class="f">E = K·Q/r² (r ≥ R)</td></tr>
+        <tr><td>Esfera uniformemente cargada</td><td class="f">E = K·Q·r/R³ (r &lt; R)</td><td class="f">E = K·Q/r² (r ≥ R)</td></tr>
+        <tr><td>Hilo rectilíneo infinito</td><td colspan="2" class="f">E = λ/(2π·ε·r) ∝ 1/r</td></tr>
+        <tr><td>Lámina plana infinita</td><td colspan="2" class="f">E = σ/(2ε), uniforme</td></tr>
+        <tr><td>Condensador (dos láminas)</td><td class="f">E = σ/ε entre placas</td><td class="f">E = 0 fuera</td></tr>
+      </table>
+    </div>
+
+    <footer>Simulador educativo basado en el tema «El campo electrostático». Los valores son ilustrativos; ajusta los controles de cada pestaña para explorar los casos límite.</footer>
+  </section>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+var K = 9e9;
+var EPS0 = 1/(4*Math.PI*K);
+
+/* ---------------- formatting helpers ---------------- */
+function toSup(n){
+  var map={"-":"⁻","0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹"};
+  return String(n).split("").map(function(c){return map[c]||c;}).join("");
+}
+function fmt(x, unit){
+  if(x===null||x===undefined||!isFinite(x)) return "—";
+  var ax=Math.abs(x);
+  var s;
+  if(ax!==0 && (ax<0.01 || ax>=100000)){
+    var exp=Math.floor(Math.log10(ax));
+    var mant=x/Math.pow(10,exp);
+    s = mant.toFixed(2).replace(".",",") + "×10" + toSup(exp);
+  } else if(ax===0){
+    s = "0";
+  } else {
+    s = x.toFixed(ax<1?3:2).replace(".",",");
+  }
+  return unit ? s+" "+unit : s;
+}
+function fmtSigned(x,unit){
+  var s = fmt(Math.abs(x),unit);
+  return (x<0?"−":"+") + s;
+}
+
+/* ================================================================
+   TAB SWITCHING
+   ================================================================ */
+var tabs = document.querySelectorAll(".tab-btn");
+var panels = {t1:document.getElementById("t1"), t2:document.getElementById("t2"), t3:document.getElementById("t3"), t4:document.getElementById("t4")};
+tabs.forEach(function(btn){
+  btn.addEventListener("click", function(){
+    tabs.forEach(function(b){b.setAttribute("aria-selected", b===btn ? "true":"false");});
+    Object.keys(panels).forEach(function(k){panels[k].hidden = (k!==btn.dataset.tab);});
+    if(btn.dataset.tab==="t1") requestAnimationFrame(renderTab1);
+    if(btn.dataset.tab==="t2") requestAnimationFrame(renderTab2);
+    if(btn.dataset.tab==="t3") requestAnimationFrame(renderTab3);
+  });
+});
+
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+/* ================================================================
+   TAB 1 — POINT CHARGES SANDBOX
+   ================================================================ */
+var c1 = document.getElementById("c1");
+var ctx1 = c1.getContext("2d");
+var W1=c1.width, H1=c1.height;
+var DOMAIN_W = 10; // meters across the canvas width
+var scale1 = W1/DOMAIN_W; // px per meter
+var domain1 = {xmin:-DOMAIN_W/2, xmax:DOMAIN_W/2, ymin:-(H1/scale1)/2, ymax:(H1/scale1)/2};
+
+function w2sx(x){ return W1/2 + x*scale1; }
+function w2sy(y){ return H1/2 - y*scale1; }
+function s2wx(px){ return (px-W1/2)/scale1; }
+function s2wy(py){ return (H1/2-py)/scale1; }
+
+var nextId = 1;
+var charges = [
+  {id:nextId++, x:-2.2, y:0.3, q:4},
+  {id:nextId++, x:2.0, y:-0.4, q:-3}
+];
+var probe = {x:0, y:2.2, q:1};
+var selectedId = null;
+var ptA=null, ptB=null; // {x,y,V}
+
+var opts1 = {vec:true, lines:true, eq:false};
+
+function fieldAt(x,y){
+  var Ex=0, Ey=0;
+  for(var i=0;i<charges.length;i++){
+    var c=charges[i];
+    var dx=x-c.x, dy=y-c.y;
+    var r=Math.hypot(dx,dy);
+    if(r<0.1) r=0.1;
+    var e = K*(c.q*1e-6)/(r*r*r);
+    Ex += e*dx; Ey += e*dy;
+  }
+  return {x:Ex, y:Ey};
+}
+function potentialAt(x,y){
+  var v=0;
+  for(var i=0;i<charges.length;i++){
+    var c=charges[i];
+    var r=Math.hypot(x-c.x,y-c.y);
+    if(r<0.12) r=0.12;
+    v += K*(c.q*1e-6)/r;
+  }
+  return v;
+}
+
+function computeVGrid(nx,ny){
+  var g = new Float64Array(nx*ny);
+  var dx=(domain1.xmax-domain1.xmin)/(nx-1), dy=(domain1.ymax-domain1.ymin)/(ny-1);
+  for(var j=0;j<ny;j++){
+    var y=domain1.ymin+j*dy;
+    for(var i=0;i<nx;i++){
+      var x=domain1.xmin+i*dx;
+      g[j*nx+i]=potentialAt(x,y);
+    }
+  }
+  return {grid:g, nx:nx, ny:ny, dx:dx, dy:dy};
+}
+function marchingSquares(go, level){
+  var grid=go.grid, nx=go.nx, ny=go.ny, dx=go.dx, dy=go.dy;
+  var segs=[];
+  function val(i,j){ return grid[j*nx+i]; }
+  function ip(xa,ya,va,xb,yb,vb){
+    var t=(level-va)/(vb-va);
+    return [xa+(xb-xa)*t, ya+(yb-ya)*t];
+  }
+  for(var j=0;j<ny-1;j++){
+    var y0=domain1.ymin+j*dy, y1=domain1.ymin+(j+1)*dy;
+    for(var i=0;i<nx-1;i++){
+      var x0=domain1.xmin+i*dx, x1=domain1.xmin+(i+1)*dx;
+      var vTL=val(i,j), vTR=val(i+1,j), vBR=val(i+1,j+1), vBL=val(i,j+1);
+      var pts=[];
+      if((vTL-level)*(vTR-level)<0) pts.push({e:"t",p:ip(x0,y0,vTL,x1,y0,vTR)});
+      if((vTR-level)*(vBR-level)<0) pts.push({e:"r",p:ip(x1,y0,vTR,x1,y1,vBR)});
+      if((vBL-level)*(vBR-level)<0) pts.push({e:"b",p:ip(x0,y1,vBL,x1,y1,vBR)});
+      if((vTL-level)*(vBL-level)<0) pts.push({e:"l",p:ip(x0,y0,vTL,x0,y1,vBL)});
+      if(pts.length===2){
+        segs.push([pts[0].p, pts[1].p]);
+      } else if(pts.length===4){
+        var byE={}; pts.forEach(function(p){byE[p.e]=p.p;});
+        if(vTL>level){
+          segs.push([byE.l, byE.t]); segs.push([byE.r, byE.b]);
+        } else {
+          segs.push([byE.t, byE.r]); segs.push([byE.b, byE.l]);
+        }
+      }
+    }
+  }
+  return segs;
+}
+
+function traceFieldLines(){
+  var lines=[];
+  var positives = charges.filter(function(c){return c.q>0;});
+  var ds=0.045, steps=900;
+  positives.forEach(function(c){
+    var nSeed = Math.max(6, Math.min(14, Math.round(Math.abs(c.q))+6));
+    for(var k=0;k<nSeed;k++){
+      var ang = (2*Math.PI*k)/nSeed;
+      var x=c.x+0.2*Math.cos(ang), y=c.y+0.2*Math.sin(ang);
+      var pts=[[x,y]];
+      for(var s=0;s<steps;s++){
+        var E=fieldAt(x,y);
+        var mag=Math.hypot(E.x,E.y);
+        if(mag<1e-5) break;
+        x += ds*E.x/mag; y += ds*E.y/mag;
+        pts.push([x,y]);
+        if(x<domain1.xmin-1||x>domain1.xmax+1||y<domain1.ymin-1||y>domain1.ymax+1) break;
+        var absorbed=false;
+        for(var oi=0;oi<charges.length;oi++){
+          var o=charges[oi];
+          if(o===c) continue;
+          if(Math.hypot(x-o.x,y-o.y)<0.16){ absorbed=true; break; }
+        }
+        if(absorbed) break;
+      }
+      lines.push(pts);
+    }
+  });
+  return lines;
+}
+
+function drawArrow(ctx, x1,y1,x2,y2, color, lw){
+  ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=lw||1.5;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  var ang=Math.atan2(y2-y1,x2-x1);
+  var hl=5+lw;
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-hl*Math.cos(ang-0.4), y2-hl*Math.sin(ang-0.4));
+  ctx.lineTo(x2-hl*Math.cos(ang+0.4), y2-hl*Math.sin(ang+0.4));
+  ctx.closePath(); ctx.fill();
+}
+
+var vGridCache=null;
+
+function renderTab1(){
+  var surface=cssVar("--surface-2"), line=cssVar("--grid-line"), ink=cssVar("--ink"), inkDim=cssVar("--ink-dim");
+  var pos=cssVar("--pos"), neg=cssVar("--neg"), accent=cssVar("--accent");
+  ctx1.clearRect(0,0,W1,H1);
+  ctx1.fillStyle=surface; ctx1.fillRect(0,0,W1,H1);
+
+  // grid
+  ctx1.strokeStyle=line; ctx1.lineWidth=1;
+  for(var gx=Math.ceil(domain1.xmin); gx<=domain1.xmax; gx++){
+    ctx1.beginPath(); ctx1.moveTo(w2sx(gx),0); ctx1.lineTo(w2sx(gx),H1); ctx1.stroke();
+  }
+  for(var gy=Math.ceil(domain1.ymin); gy<=domain1.ymax; gy++){
+    ctx1.beginPath(); ctx1.moveTo(0,w2sy(gy)); ctx1.lineTo(W1,w2sy(gy)); ctx1.stroke();
+  }
+
+  // equipotentials
+  if(opts1.eq && charges.length){
+    vGridCache = computeVGrid(72,52);
+    var vals = Array.prototype.slice.call(vGridCache.grid).sort(function(a,b){return a-b;});
+    var qs=[0.08,0.22,0.36,0.5,0.64,0.78,0.92];
+    var levels = qs.map(function(q){ return vals[Math.floor(q*(vals.length-1))]; });
+    levels = levels.filter(function(v,i){ return i===0 || Math.abs(v-levels[i-1])>1e-6; });
+    ctx1.setLineDash([5,4]);
+    levels.forEach(function(lv){
+      var segs = marchingSquares(vGridCache, lv);
+      ctx1.strokeStyle = lv>=0 ? pos : neg;
+      ctx1.globalAlpha=0.55;
+      ctx1.lineWidth=1.3;
+      segs.forEach(function(s){
+        ctx1.beginPath();
+        ctx1.moveTo(w2sx(s[0][0]), w2sy(s[0][1]));
+        ctx1.lineTo(w2sx(s[1][0]), w2sy(s[1][1]));
+        ctx1.stroke();
+      });
+    });
+    ctx1.globalAlpha=1; ctx1.setLineDash([]);
+  }
+
+  // field lines
+  if(opts1.lines && charges.length){
+    var lines = traceFieldLines();
+    ctx1.lineWidth=1.3;
+    lines.forEach(function(pts){
+      if(pts.length<2) return;
+      ctx1.strokeStyle=accent; ctx1.globalAlpha=0.55;
+      ctx1.beginPath();
+      ctx1.moveTo(w2sx(pts[0][0]), w2sy(pts[0][1]));
+      for(var i=1;i<pts.length;i++) ctx1.lineTo(w2sx(pts[i][0]), w2sy(pts[i][1]));
+      ctx1.stroke();
+      ctx1.globalAlpha=1;
+      var mid=pts[Math.floor(pts.length*0.5)];
+      var nxt=pts[Math.min(pts.length-1, Math.floor(pts.length*0.5)+2)];
+      if(mid && nxt && (mid[0]!==nxt[0]||mid[1]!==nxt[1])){
+        drawArrow(ctx1, w2sx(mid[0]),w2sy(mid[1]), w2sx(nxt[0]),w2sy(nxt[1]), accent, 1.2);
+      }
+    });
+  }
+
+  // vector grid
+  if(opts1.vec && charges.length){
+    for(var vx=Math.ceil(domain1.xmin)+0.4; vx<domain1.xmax; vx+=1){
+      for(var vy=Math.ceil(domain1.ymin)+0.4; vy<domain1.ymax; vy+=1){
+        var E=fieldAt(vx,vy);
+        var mag=Math.hypot(E.x,E.y);
+        if(mag<1) continue;
+        var len = Math.min(42, 10+8*Math.log10(1+mag/500));
+        var ux=E.x/mag, uy=E.y/mag;
+        var sx=w2sx(vx), sy=w2sy(vy);
+        var ex=sx+ux*len, ey=sy-uy*len;
+        drawArrow(ctx1, sx,sy, ex,ey, inkDim, 1.1);
+      }
+    }
+  }
+
+  // charges
+  charges.forEach(function(c){
+    var sx=w2sx(c.x), sy=w2sy(c.y);
+    var r = 11 + Math.min(10, Math.abs(c.q)*1.1);
+    ctx1.beginPath(); ctx1.arc(sx,sy,r,0,Math.PI*2);
+    ctx1.fillStyle = c.q>=0 ? pos : neg;
+    ctx1.fill();
+    if(c.id===selectedId){
+      ctx1.lineWidth=2.5; ctx1.strokeStyle=accent;
+      ctx1.beginPath(); ctx1.arc(sx,sy,r+4,0,Math.PI*2); ctx1.stroke();
+    }
+    ctx1.fillStyle="#fff"; ctx1.font="700 13px "+getFontBody();
+    ctx1.textAlign="center"; ctx1.textBaseline="middle";
+    ctx1.fillText(c.q>=0?"+":"−", sx, sy+1);
+    ctx1.fillStyle=ink; ctx1.font="500 11px "+getFontMono();
+    ctx1.fillText(fmtSigned(c.q,"µC"), sx, sy+r+13);
+  });
+
+  // A / B markers
+  [["A",ptA],["B",ptB]].forEach(function(pair){
+    var label=pair[0], p=pair[1];
+    if(!p) return;
+    var sx=w2sx(p.x), sy=w2sy(p.y);
+    ctx1.strokeStyle=ink; ctx1.lineWidth=1.5;
+    ctx1.beginPath(); ctx1.moveTo(sx,sy); ctx1.lineTo(sx,sy-22); ctx1.stroke();
+    ctx1.fillStyle=accent;
+    ctx1.beginPath(); ctx1.moveTo(sx,sy-22); ctx1.lineTo(sx+14,sy-17); ctx1.lineTo(sx,sy-12); ctx1.closePath(); ctx1.fill();
+    ctx1.fillStyle="#fff"; ctx1.font="700 10px "+getFontBody();
+    ctx1.textAlign="center"; ctx1.textBaseline="middle";
+    ctx1.fillText(label, sx+6, sy-17);
+  });
+
+  // probe
+  (function(){
+    var sx=w2sx(probe.x), sy=w2sy(probe.y);
+    ctx1.save();
+    ctx1.translate(sx,sy); ctx1.rotate(Math.PI/4);
+    ctx1.fillStyle=accent;
+    ctx1.fillRect(-8,-8,16,16);
+    ctx1.restore();
+    var E=fieldAt(probe.x,probe.y);
+    var mag=Math.hypot(E.x,E.y);
+    if(mag>1){
+      var len=Math.min(60,16+10*Math.log10(1+mag/500));
+      var ux=E.x/mag, uy=E.y/mag;
+      drawArrow(ctx1, sx,sy, sx+ux*len, sy-uy*len, accent, 2);
+    }
+  })();
+}
+function getFontBody(){ return "IBM Plex Sans, sans-serif"; }
+function getFontMono(){ return "IBM Plex Mono, monospace"; }
+
+function updateReadout1(){
+  var E=fieldAt(probe.x,probe.y);
+  var mag=Math.hypot(E.x,E.y);
+  var angle=Math.atan2(E.y,E.x)*180/Math.PI;
+  var V=potentialAt(probe.x,probe.y);
+  var F=mag*Math.abs(probe.q*1e-6);
+  document.getElementById("probePos").textContent = "("+probe.x.toFixed(2)+", "+probe.y.toFixed(2)+") m";
+  document.getElementById("probeE").textContent = fmt(mag,"N/C");
+  document.getElementById("probeEdir").textContent = mag>1 ? angle.toFixed(0)+"°" : "—";
+  document.getElementById("probeV").textContent = fmtSigned(V,"V");
+  document.getElementById("probeF").textContent = fmt(F,"N");
+
+  document.getElementById("ptA").textContent = ptA ? "("+ptA.x.toFixed(2)+", "+ptA.y.toFixed(2)+")" : "—";
+  document.getElementById("ptB").textContent = ptB ? "("+ptB.x.toFixed(2)+", "+ptB.y.toFixed(2)+")" : "—";
+  document.getElementById("vA").textContent = ptA ? fmtSigned(ptA.V,"V") : "—";
+  document.getElementById("vB").textContent = ptB ? fmtSigned(ptB.V,"V") : "—";
+  var wabEl=document.getElementById("wab"), note=document.getElementById("wabNote");
+  if(ptA && ptB){
+    var W = probe.q*1e-6*(ptA.V-ptB.V);
+    wabEl.textContent = fmtSigned(W,"J");
+    if(W>0){
+      note.textContent = "W > 0: el movimiento de A a B es espontáneo (la energía potencial de la sonda disminuye).";
+    } else if(W<0){
+      note.textContent = "W < 0: hace falta una fuerza externa para llevar la sonda de A a B; W_ext = −W_campo.";
+    } else {
+      note.textContent = "W ≈ 0: A y B están en la misma superficie equipotencial.";
+    }
+  } else {
+    wabEl.textContent="—";
+    note.textContent="Fija A y B para ver si el movimiento es espontáneo o requiere una fuerza externa.";
+  }
+}
+
+/* --- selection panel --- */
+function refreshSelPanel(){
+  var sel = charges.find(function(c){return c.id===selectedId;});
+  var field=document.getElementById("selField"), hint=document.getElementById("selHint");
+  if(sel){
+    field.hidden=false; hint.hidden=true;
+    document.getElementById("selSlider").value=sel.q;
+    document.getElementById("selVal").textContent=fmtSigned(sel.q,"µC");
+  } else {
+    field.hidden=true; hint.hidden=false;
+  }
+}
+document.getElementById("selSlider").addEventListener("input", function(e){
+  var sel = charges.find(function(c){return c.id===selectedId;});
+  if(!sel) return;
+  var v=parseFloat(e.target.value);
+  if(Math.abs(v)<0.5) v = v<0?-0.5:0.5;
+  sel.q=v;
+  document.getElementById("selVal").textContent=fmtSigned(v,"µC");
+  dirty1=true;
+});
+document.getElementById("delSel").addEventListener("click", function(){
+  charges = charges.filter(function(c){return c.id!==selectedId;});
+  selectedId=null; refreshSelPanel(); dirty1=true;
+});
+document.getElementById("addPos").addEventListener("click", function(){
+  var x=(Math.random()*4-2), y=(Math.random()*3-1.5);
+  var c={id:nextId++, x:x, y:y, q:3};
+  charges.push(c); selectedId=c.id; refreshSelPanel(); dirty1=true;
+});
+document.getElementById("addNeg").addEventListener("click", function(){
+  var x=(Math.random()*4-2), y=(Math.random()*3-1.5);
+  var c={id:nextId++, x:x, y:y, q:-3};
+  charges.push(c); selectedId=c.id; refreshSelPanel(); dirty1=true;
+});
+document.getElementById("probeSlider").addEventListener("input", function(e){
+  probe.q=parseFloat(e.target.value);
+  document.getElementById("probeVal").textContent=fmtSigned(probe.q,"µC");
+  dirty1=true;
+});
+document.getElementById("toggleVec").addEventListener("change", function(e){ opts1.vec=e.target.checked; dirty1=true; });
+document.getElementById("toggleLines").addEventListener("change", function(e){ opts1.lines=e.target.checked; dirty1=true; });
+document.getElementById("toggleEq").addEventListener("change", function(e){ opts1.eq=e.target.checked; dirty1=true; });
+document.getElementById("setA").addEventListener("click", function(){ ptA={x:probe.x,y:probe.y,V:potentialAt(probe.x,probe.y)}; dirty1=true; });
+document.getElementById("setB").addEventListener("click", function(){ ptB={x:probe.x,y:probe.y,V:potentialAt(probe.x,probe.y)}; dirty1=true; });
+document.getElementById("clearAB").addEventListener("click", function(){ ptA=null; ptB=null; dirty1=true; });
+
+/* --- pointer interaction --- */
+var dragTarget=null; // "probe" or charge id
+function hitTest(px,py){
+  var wx=s2wx(px), wy=s2wy(py);
+  var best=null, bestD=0.42;
+  if(Math.hypot(wx-probe.x, wy-probe.y) < 0.35) return "probe";
+  charges.forEach(function(c){
+    var d=Math.hypot(wx-c.x, wy-c.y);
+    if(d<bestD){ bestD=d; best=c.id; }
+  });
+  return best;
+}
+function clampToDomain(p){
+  p.x=Math.max(domain1.xmin+0.1, Math.min(domain1.xmax-0.1, p.x));
+  p.y=Math.max(domain1.ymin+0.1, Math.min(domain1.ymax-0.1, p.y));
+}
+c1.addEventListener("pointerdown", function(e){
+  var r=c1.getBoundingClientRect();
+  var px=(e.clientX-r.left)*(W1/r.width), py=(e.clientY-r.top)*(H1/r.height);
+  var hit=hitTest(px,py);
+  if(hit==="probe"){ dragTarget="probe"; }
+  else if(hit!==null){ dragTarget=hit; selectedId=hit; refreshSelPanel(); }
+  else { selectedId=null; refreshSelPanel(); }
+  dirty1=true;
+  c1.setPointerCapture(e.pointerId);
+});
+c1.addEventListener("pointermove", function(e){
+  if(dragTarget===null) return;
+  var r=c1.getBoundingClientRect();
+  var px=(e.clientX-r.left)*(W1/r.width), py=(e.clientY-r.top)*(H1/r.height);
+  var wx=s2wx(px), wy=s2wy(py);
+  if(dragTarget==="probe"){
+    probe.x=wx; probe.y=wy; clampToDomain(probe);
+  } else {
+    var c=charges.find(function(cc){return cc.id===dragTarget;});
+    if(c){ c.x=wx; c.y=wy; clampToDomain(c); }
+  }
+  dirty1=true;
+});
+window.addEventListener("pointerup", function(){ dragTarget=null; });
+
+var dirty1=true;
+function loop1(){
+  if(dirty1 && !panels.t1.hidden){
+    renderTab1();
+    updateReadout1();
+    dirty1=false;
+  }
+  requestAnimationFrame(loop1);
+}
+loop1();
+
+/* ================================================================
+   TAB 2 — UNIFORM FIELD / CAPACITOR
+   ================================================================ */
+var c2=document.getElementById("c2");
+var ctx2=c2.getContext("2d");
+var W2=c2.width, H2=c2.height;
+var pxPerCm = 48;
+var leftPlateX = 170;
+
+var state2 = {d:4, sigma:8, q:1, m:1, v0:4, angle:0};
+var anim2 = {path:null, playing:false, elapsed:0, duration:2600, exitReason:null, a:0, v0x:0, v0y:0};
+
+function rightPlateX(){ return leftPlateX + state2.d*pxPerCm; }
+
+function getE2(){ return (state2.sigma*1e-6)/EPS0; } // N/C, sign follows sigma (field points left->right if sigma>0)
+
+function simulateTrajectory(){
+  var d = state2.d/100; // m
+  var E = getE2();
+  var a = (state2.q*1e-6*E)/(state2.m/1000); // m/s^2
+  var rad = state2.angle*Math.PI/180;
+  var v0x = state2.v0*Math.cos(rad), v0y = state2.v0*Math.sin(rad);
+  var halfHeight = 0.09; // m, visual half-length of plates
+  var guesses=[];
+  if(Math.abs(v0x)>1e-9) guesses.push(d/Math.abs(v0x));
+  if(Math.abs(a)>1e-9) guesses.push(Math.sqrt(2*d/Math.abs(a)));
+  if(Math.abs(v0y)>1e-9) guesses.push(halfHeight/Math.abs(v0y));
+  var tMax = guesses.length ? Math.max.apply(null,guesses)*3 : 1;
+  if(!isFinite(tMax)||tMax<=0) tMax=1;
+  tMax = Math.min(Math.max(tMax,0.0008), 20);
+  var N=1200, dt=tMax/N;
+  var path=[]; var exitReason="tiempo máximo";
+  for(var i=0;i<=N;i++){
+    var t=i*dt;
+    var x=v0x*t+0.5*a*t*t;
+    var y=v0y*t;
+    path.push({t:t,x:x,y:y});
+    if(x<0){ exitReason="placa izquierda"; break; }
+    if(x>d){ exitReason="placa derecha"; break; }
+    if(Math.abs(y)>halfHeight){ exitReason="borde superior/inferior de las placas"; break; }
+  }
+  return {path:path, exitReason:exitReason, a:a, v0x:v0x, v0y:v0y, d:d, halfHeight:halfHeight, E:E};
+}
+
+function x2sx(xrel_m, d_m){ return leftPlateX + (xrel_m/d_m)*(rightPlateX()-leftPlateX); }
+function y2sy(yrel_m, halfHeight_m){ var halfPx=(H2/2-50); return H2/2 - (yrel_m/halfHeight_m)*halfPx; }
+
+function renderTab2(){
+  var surface=cssVar("--surface-2"), ink=cssVar("--ink"), inkDim=cssVar("--ink-dim");
+  var pos=cssVar("--pos"), neg=cssVar("--neg"), accent=cssVar("--accent");
+  ctx2.clearRect(0,0,W2,H2);
+  ctx2.fillStyle=surface; ctx2.fillRect(0,0,W2,H2);
+
+  var rp=rightPlateX();
+  var plateTop=40, plateBot=H2-40;
+  var leftIsPos = state2.sigma>=0;
+
+  // field arrows
+  ctx2.strokeStyle=inkDim; ctx2.fillStyle=inkDim; ctx2.lineWidth=1.2;
+  var dirSign = state2.sigma>=0 ? 1 : -1;
+  for(var yy=plateTop+20; yy<plateBot; yy+=34){
+    var ax1 = dirSign>0?leftPlateX+14:rp-14;
+    var ax2 = dirSign>0?rp-14:leftPlateX+14;
+    drawArrow(ctx2, ax1, yy, ax2, yy, inkDim, 1.1);
+  }
+
+  // plates
+  [[leftPlateX,leftIsPos],[rp,!leftIsPos]].forEach(function(pl){
+    var x=pl[0], isPos=pl[1];
+    ctx2.fillStyle = isPos?pos:neg;
+    ctx2.fillRect(x-4,plateTop,8,plateBot-plateTop);
+    ctx2.fillStyle="#fff"; ctx2.font="700 13px "+getFontBody();
+    ctx2.textAlign="center";
+    for(var sy=plateTop+16; sy<plateBot; sy+=22){
+      ctx2.fillText(isPos?"+":"−", x, sy+5);
+    }
+  });
+
+  // trajectory
+  if(anim2.path){
+    var frac = Math.min(1, anim2.elapsed/anim2.duration);
+    var path=anim2.path.path, d_m=anim2.path.d, hh=anim2.path.halfHeight;
+    var upto = Math.max(1, Math.floor(frac*(path.length-1)));
+    ctx2.strokeStyle=accent; ctx2.lineWidth=2.2;
+    ctx2.beginPath();
+    for(var i=0;i<=upto;i++){
+      var p=path[i];
+      var sx=x2sx(p.x,d_m), sy=y2sy(p.y,hh);
+      if(i===0) ctx2.moveTo(sx,sy); else ctx2.lineTo(sx,sy);
+    }
+    ctx2.stroke();
+    var cur=path[upto];
+    var csx=x2sx(cur.x,d_m), csy=y2sy(cur.y,hh);
+    ctx2.fillStyle = state2.q>=0?pos:neg;
+    ctx2.beginPath(); ctx2.arc(csx,csy,8,0,Math.PI*2); ctx2.fill();
+    ctx2.strokeStyle=ink; ctx2.lineWidth=1.5; ctx2.stroke();
+  } else {
+    // show starting point
+    ctx2.fillStyle = state2.q>=0?pos:neg;
+    var sy0=H2/2;
+    ctx2.beginPath(); ctx2.arc(leftPlateX+4,sy0,8,0,Math.PI*2); ctx2.fill();
+  }
+
+  // d label
+  ctx2.strokeStyle=inkDim; ctx2.setLineDash([3,3]); ctx2.lineWidth=1;
+  ctx2.beginPath(); ctx2.moveTo(leftPlateX,plateBot+18); ctx2.lineTo(rp,plateBot+18); ctx2.stroke();
+  ctx2.setLineDash([]);
+  ctx2.fillStyle=inkDim; ctx2.font="500 12px "+getFontMono(); ctx2.textAlign="center";
+  ctx2.fillText("d = "+state2.d+" cm", (leftPlateX+rp)/2, plateBot+34);
+}
+
+function updateControls2Labels(){
+  document.getElementById("dVal").textContent = state2.d+" cm";
+  document.getElementById("sigVal").textContent = fmtSigned(state2.sigma,"µC/m²");
+  document.getElementById("qVal").textContent = fmtSigned(state2.q,"µC");
+  document.getElementById("mVal").textContent = state2.m+" g";
+  document.getElementById("vVal").textContent = state2.v0+" m/s";
+  document.getElementById("angVal").textContent = state2.angle+"°";
+  var E=getE2();
+  var a=(state2.q*1e-6*E)/(state2.m/1000);
+  var dv=Math.abs(E*(state2.d/100));
+  document.getElementById("eField").textContent=fmtSigned(E,"N/C");
+  document.getElementById("aField").textContent=fmtSigned(a,"m/s²");
+  document.getElementById("dvField").textContent=fmt(dv,"V");
+}
+
+function updateEqBox(){
+  var E=getE2();
+  var a=(state2.q*1e-6*E)/(state2.m/1000);
+  var rad=state2.angle*Math.PI/180;
+  var v0x=state2.v0*Math.cos(rad), v0y=state2.v0*Math.sin(rad);
+  var kind = (Math.abs(v0y)<1e-6) ? "M.R.U.A. rectilíneo (toda la velocidad es paralela a E)" : "trayectoria parabólica (MRU en y, M.R.U.A. en x)";
+  var lines = [];
+  lines.push("a = q·E/m = "+fmtSigned(a,"m/s²"));
+  lines.push("v₀ₓ = "+fmt(v0x,"m/s")+"   v₀ᵧ = "+fmt(v0y,"m/s"));
+  lines.push("x(t) = "+fmt(v0x,"")+"·t + ½·("+fmtSigned(a,"")+")·t²   [m]");
+  lines.push("y(t) = "+fmt(v0y,"")+"·t   [m]");
+  lines.push("Tipo de movimiento: "+kind);
+  document.getElementById("eqBox").textContent = lines.join("\n");
+}
+
+["dSlider","sigSlider","qSlider","mSlider","vSlider","angSlider"].forEach(function(id){
+  document.getElementById(id).addEventListener("input", function(e){
+    var map={dSlider:"d",sigSlider:"sigma",qSlider:"q",mSlider:"m",vSlider:"v0",angSlider:"angle"};
+    state2[map[id]] = parseFloat(e.target.value);
+    updateControls2Labels(); updateEqBox();
+    anim2.path=null; anim2.playing=false;
+    document.getElementById("playPause").disabled=true;
+    document.getElementById("playPause").textContent="Pausar";
+    document.getElementById("exitNote").textContent="Pulsa «Lanzar partícula» para iniciar el movimiento.";
+    renderTab2();
+  });
+});
+
+document.getElementById("launchBtn").addEventListener("click", function(){
+  var sim = simulateTrajectory();
+  anim2.path = sim;
+  anim2.elapsed = 0;
+  anim2.playing = true;
+  anim2.startTs = null;
+  document.getElementById("playPause").disabled=false;
+  document.getElementById("playPause").textContent="Pausar";
+  var reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(reducedMotion){
+    anim2.elapsed = anim2.duration;
+    anim2.playing = false;
+    document.getElementById("playPause").disabled=true;
+    renderTab2();
+    showExitNote(sim);
+  }
+});
+document.getElementById("playPause").addEventListener("click", function(e){
+  anim2.playing = !anim2.playing;
+  anim2.startTs = null;
+  e.target.textContent = anim2.playing ? "Pausar" : "Reanudar";
+});
+function showExitNote(sim){
+  var t = sim.path.length ? sim.path[sim.path.length-1].t : 0;
+  document.getElementById("exitNote").textContent =
+    "La partícula sale de la región por: "+sim.exitReason+" (t ≈ "+fmt(t,"s")+").";
+}
+function animLoop2(ts){
+  if(anim2.path && anim2.playing){
+    if(anim2.startTs===null) anim2.startTs = ts - anim2.elapsed;
+    anim2.elapsed = ts - anim2.startTs;
+    if(anim2.elapsed>=anim2.duration){
+      anim2.elapsed=anim2.duration;
+      anim2.playing=false;
+      document.getElementById("playPause").disabled=true;
+      showExitNote(anim2.path);
+    }
+    renderTab2();
+  }
+  requestAnimationFrame(animLoop2);
+}
+requestAnimationFrame(animLoop2);
+
+/* ================================================================
+   TAB 3 — CONTINUOUS DISTRIBUTIONS
+   ================================================================ */
+var c3=document.getElementById("c3");
+var ctx3=c3.getContext("2d");
+var W3=c3.width, H3=c3.height;
+
+var dist3 = "cond";
+var p3 = {Q:6, R:10, lam:0.4, sig:3, capd:6};
+
+var distNames = {cond:"conductor esférico", sphere:"esfera uniforme", wire:"hilo infinito", sheet:"lámina infinita", cap:"condensador"};
+
+function Efunc3(r){
+  var Qc = p3.Q*1e-6, Rm = p3.R/100;
+  switch(dist3){
+    case "cond":
+      return r<Rm ? 0 : K*Qc/(r*r);
+    case "sphere":
+      return r<Rm ? K*Qc*r/(Rm*Rm*Rm) : K*Qc/(r*r);
+    case "wire":
+      var lam = p3.lam*1e-6;
+      return lam/(2*Math.PI*EPS0*Math.max(r,0.004));
+    case "sheet":
+      var sig = p3.sig*1e-6;
+      return sig/(2*EPS0) + 0*r;
+    case "cap":
+      var sigc = p3.sig*1e-6;
+      var dM = p3.capd/100;
+      return (r>=0 && r<=dM) ? sigc/EPS0 : 0;
+  }
+  return 0;
+}
+
+function domainFor3(){
+  if(dist3==="cond"||dist3==="sphere"){
+    var Rm=p3.R/100;
+    return {rmin:0, rmax:Rm*3, Rmark:Rm};
+  }
+  if(dist3==="wire"){ return {rmin:0.01, rmax:1.0, Rmark:null}; }
+  if(dist3==="sheet"){ return {rmin:0, rmax:1.0, Rmark:null}; }
+  if(dist3==="cap"){ var dM=p3.capd/100; return {rmin:-0.3*dM-0.02, rmax:dM*1.3, Rmark:dM}; }
+  return {rmin:0,rmax:1,Rmark:null};
+}
+
+function renderTab3(){
+  var surface=cssVar("--surface-2"), ink=cssVar("--ink"), inkDim=cssVar("--ink-dim"), accent=cssVar("--accent"), line=cssVar("--grid-line");
+  ctx3.clearRect(0,0,W3,H3);
+  ctx3.fillStyle=surface; ctx3.fillRect(0,0,W3,H3);
+
+  var dom=domainFor3();
+  var padL=92, padR=24, padT=20, padB=44;
+  var plotW=W3-padL-padR, plotH=H3-padT-padB;
+
+  var N=360;
+  var pts=[];
+  var maxE=0;
+  for(var i=0;i<=N;i++){
+    var r = dom.rmin + (dom.rmax-dom.rmin)*i/N;
+    var e = Efunc3(r);
+    pts.push([r,e]);
+    if(isFinite(e)) maxE=Math.max(maxE,Math.abs(e));
+  }
+  if(maxE<=0) maxE=1;
+  maxE *= 1.18;
+
+  function rx(r){ return padL + (r-dom.rmin)/(dom.rmax-dom.rmin)*plotW; }
+  function ey(e){ return padT+plotH - (e/maxE)*plotH; }
+
+  // axes
+  ctx3.strokeStyle=inkDim; ctx3.lineWidth=1.2;
+  ctx3.beginPath(); ctx3.moveTo(padL,padT); ctx3.lineTo(padL,padT+plotH); ctx3.lineTo(padL+plotW,padT+plotH); ctx3.stroke();
+
+  // grid + y ticks
+  ctx3.fillStyle=inkDim; ctx3.font="500 11px "+getFontMono(); ctx3.textAlign="right"; ctx3.textBaseline="middle";
+  for(var t=0;t<=4;t++){
+    var ev=maxE*t/4;
+    var yy=ey(ev);
+    ctx3.strokeStyle=line; ctx3.beginPath(); ctx3.moveTo(padL,yy); ctx3.lineTo(padL+plotW,yy); ctx3.stroke();
+    ctx3.fillStyle=inkDim; ctx3.fillText(fmt(ev), padL-8, yy);
+  }
+  ctx3.textAlign="center"; ctx3.font="600 11px "+getFontBody();
+  ctx3.save(); ctx3.translate(16,padT+plotH/2); ctx3.rotate(-Math.PI/2);
+  ctx3.fillText("E (N/C)",0,0); ctx3.restore();
+  ctx3.fillText(dist3==="cap"?"posición entre placas (m)":"r (m)", padL+plotW/2, H3-10);
+
+  // x ticks
+  ctx3.textAlign="center"; ctx3.font="500 11px "+getFontMono();
+  for(var xt=0;xt<=4;xt++){
+    var rv=dom.rmin+(dom.rmax-dom.rmin)*xt/4;
+    ctx3.fillStyle=inkDim;
+    ctx3.fillText(rv.toFixed(2), rx(rv), padT+plotH+16);
+  }
+
+  // R marker
+  if(dom.Rmark!==null && dom.Rmark>=dom.rmin && dom.Rmark<=dom.rmax){
+    ctx3.strokeStyle=accent; ctx3.setLineDash([4,4]); ctx3.lineWidth=1.2;
+    ctx3.beginPath(); ctx3.moveTo(rx(dom.Rmark),padT); ctx3.lineTo(rx(dom.Rmark),padT+plotH); ctx3.stroke();
+    ctx3.setLineDash([]);
+    ctx3.fillStyle=accent; ctx3.font="700 11px "+getFontMono(); ctx3.textAlign="center";
+    ctx3.fillText(dist3==="cap"?"d":"R", rx(dom.Rmark), padT-6);
+  }
+
+  // curve — split at discontinuity for "cond"
+  ctx3.strokeStyle=accent; ctx3.lineWidth=2.4; ctx3.lineJoin="round";
+  ctx3.beginPath();
+  var started=false;
+  pts.forEach(function(p){
+    var r=p[0], e=p[1];
+    if(dist3==="cond" && dom.Rmark!==null && Math.abs(r-dom.Rmark)<1e-9){ return; }
+    var sx=rx(r), sy=ey(e);
+    if(!started){ ctx3.moveTo(sx,sy); started=true; } else { ctx3.lineTo(sx,sy); }
+    if(dist3==="cond" && dom.Rmark!==null && r<dom.Rmark && (r+(dom.rmax-dom.rmin)/N)>=dom.Rmark){
+      ctx3.stroke(); ctx3.beginPath(); started=false;
+    }
+  });
+  ctx3.stroke();
+
+  // dashed vertical jump line for conductor at R
+  if(dist3==="cond"){
+    var surfaceE = K*(p3.Q*1e-6)/((p3.R/100)*(p3.R/100));
+    ctx3.strokeStyle=accent; ctx3.setLineDash([2,3]); ctx3.lineWidth=1.3;
+    ctx3.beginPath(); ctx3.moveTo(rx(p3.R/100), ey(0)); ctx3.lineTo(rx(p3.R/100), ey(surfaceE)); ctx3.stroke();
+    ctx3.setLineDash([]);
+  }
+
+  // peak readouts
+  var Rm=p3.R/100;
+  var surfaceVal = (dist3==="cond"||dist3==="sphere") ? K*(p3.Q*1e-6)/(Rm*Rm) : null;
+  document.getElementById("emaxField").textContent = fmt(maxE/1.18,"N/C");
+  document.getElementById("erField").textContent = surfaceVal!==null ? fmt(surfaceVal,"N/C") : "—";
+}
+
+var distFormulaText = {
+  cond: "E = 0                 (r < R, dentro del conductor)\nE = K·Q / R²          (r = R, superficie)\nE = K·Q / r²          (r > R)",
+  sphere: "E = K·Q·r / R³        (r < R, dentro de la esfera)\nE = K·Q / r²          (r ≥ R)",
+  wire: "E = λ / (2π·ε·r)       (campo radial, E ∝ 1/r)",
+  sheet: "E = σ / (2ε)           (uniforme, no depende de r)",
+  cap: "E = σ / ε              (entre placas, uniforme)\nE = 0                  (fuera de las placas)"
+};
+
+function syncDist3Params(){
+  var show = {Q:false,R:false,lam:false,sig:false,capd:false};
+  if(dist3==="cond"||dist3==="sphere"){ show.Q=true; show.R=true; }
+  if(dist3==="wire"){ show.lam=true; }
+  if(dist3==="sheet"){ show.sig=true; }
+  if(dist3==="cap"){ show.sig=true; show.capd=true; }
+  document.querySelectorAll("#distParams .field").forEach(function(f){
+    var key=f.dataset.p;
+    f.hidden = !show[key];
+  });
+  document.getElementById("distName").textContent = distNames[dist3];
+  document.getElementById("distFormula").textContent = distFormulaText[dist3];
+}
+
+document.getElementById("distSeg").addEventListener("click", function(e){
+  var btn=e.target.closest("button[data-d]");
+  if(!btn) return;
+  dist3=btn.dataset.d;
+  document.querySelectorAll("#distSeg button").forEach(function(b){ b.setAttribute("aria-pressed", b===btn?"true":"false"); });
+  syncDist3Params();
+  renderTab3();
+});
+
+[["QSlider","Q","QVal"," µC"],["RSlider","R","RVal"," cm"],["lamSlider","lam","lamVal"," µC/m"],["sig3Slider","sig","sig3Val"," µC/m²"],["capdSlider","capd","capdVal"," cm"]].forEach(function(spec){
+  var el=document.getElementById(spec[0]);
+  el.addEventListener("input", function(e){
+    p3[spec[1]] = parseFloat(e.target.value);
+    document.getElementById(spec[2]).textContent = (p3[spec[1]]>=0 && (spec[1]==="Q"||spec[1]==="lam"||spec[1]==="sig") ? "+" : "") + p3[spec[1]] + spec[3];
+    renderTab3();
+  });
+});
+
+syncDist3Params();
+
+/* initial paint when visible */
+renderTab1();
+updateReadout1();
+refreshSelPanel();
+updateControls2Labels();
+updateEqBox();
+renderTab2();
+renderTab3();
+
+})();
+</script>
+
+</body></html>
